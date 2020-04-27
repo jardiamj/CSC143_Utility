@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+
+# Validates that file name contains reasonable characters: a-z, A-z, 0-9, dot,
+# underscore and dash; and it's not longer that 255 characters.
+validate_filename() {
+    length=$(echo "${#1}")
+
+    if [[ $1 == *.java ]]; then
+        echo "[INFO] For your safety this script wont write to the requested java file: $1"
+        echo "Its purpose is to run the java compiler with some Xlint options on all"
+        echo ".java files that are not JUnit tests in the current directory."
+        echo ""
+        echo "You can also run the script without a filename and its output will be"
+        echo "printed to the terminal."
+        exit 1
+    fi
+
+    if [ "$length" -gt 255 ]; then
+        echo "File max length is 255" >&2
+        exit 1
+    fi
+
+    if ! [[ "$1" =~ ^[0-9a-zA-Z._-]+$ ]]; then
+        echo "File name can only contain: a-z, A-Z, 0-9, _, - and . characters" >&2
+        exit 1
+    fi
+}
+
+# Create a temp directory and move all test files into it
+move_test_files_to_temp() {
+    mkdir temp
+    mv *Test.java temp
+}
+
+# Move the files back and delete the now-empty directory
+move_files_back() {
+    mv temp/* .
+    rmdir temp
+}
+
+# ---------------------------- Script starts here ---------------------------
+xlint="javac -Xlint:unchecked,rawtypes *.java"
+xdoclint="javac -Xdoclint:all *.java"
+
+# if run with file name save output there, else print to screen
+filename=$1
+if [ "$filename" != "" ]; then
+    validate_filename $filename
+
+    write="yes"
+    if [ -f $filename ]; then
+        echo "[WARNING] You are about to overwrite file: $filename"
+        read -p "Do you wish to continue? (yes/no): " write
+    fi
+
+    if [ "$write" == "yes" ]; then
+        move_test_files_to_temp
+        echo "---------- ${xlint} ----------" > $filename
+        $xlint &>> $filename  
+        echo "----------  ${xdoclint}   ----------" >> $filename
+        $xdoclint &>> $filename
+        echo "All errors have been saved to: $filename"
+        move_files_back
+    fi
+else
+    move_test_files_to_temp
+    echo "---------- ${xlint} ----------"
+    $xlint  
+    echo "----------  ${xdoclint}   ----------"
+    $xdoclint
+    move_files_back
+fi
+
+exit 0
